@@ -1,6 +1,5 @@
 import socket
 import sys
-import struct
 import time
 import random
 import string
@@ -66,16 +65,21 @@ class LoginServer:
 
     @staticmethod
     def op_4608(client):
-        client.add_to_packet(str(int(time.time() * 1000)), 'str')
-        client.add_to_packet('4608', 'str')
-        client.add_to_packet(''.join(random.choices(string.digits, k=9)), 'str')
+        packet = client.packet_send
+        packet.reset_packet()
+        packet.add_to_packet(str(int(time.time() * 1000)), 's')
+        packet.add_to_packet('4608', 's')
+        packet.add_to_packet(''.join(random.choices(string.digits, k=9)), 's')
+        client.send_packet()
 
     @staticmethod
     def op_4352(client):
-        client.add_to_packet(str(int(time.time() * 1000)), 'str')
-        client.add_to_packet('4352', 'str')
-
-        client.add_to_packet('72020', 'str')
+        packet = client.packet_send
+        packet.reset_packet()
+        packet.add_to_packet(str(int(time.time() * 1000)), 's')
+        packet.add_to_packet('4352', 's')
+        packet.add_to_packet('72020', 's')
+        client.send_packet()
 
 
 LoginServer.populate_op_code_table()
@@ -85,19 +89,14 @@ class Client:
     def __init__(self, client_socket, address, server):
         self.address = address
         self.connection_socket = client_socket
-        self.packet_content = list()
-        self.packet_bytes = bytearray()
         self.server = server
-        self.packet_received_args = list()
-
-    def reset_packet(self):
-        self.packet_content = list()
-        self.packet_bytes = bytearray()
+        self.packet_rcvd = Packet()
+        self.packet_send = Packet()
 
     def process_connection(self):
         try:
             # send welcome packet first
-            self.send_packet(LoginServer.op_4608)
+            LoginServer.op_4608(self)
             self.handle_requests(201)
             self.connection_socket.close()
         except socket.timeout:
@@ -112,48 +111,34 @@ class Client:
                     break
                 if data[-1] == delimiter:
                     total_data.append(data[:-1])
-                    self.process_received_packet(b''.join(total_data))
+                    self.packet_rcvd = Packet(b''.join(total_data))
+                    self.process_received_packet()
                 else:
                     total_data.append(data)
             except ConnectionResetError:
                 print('Connection with', self.address, 'was terminated.')
                 break
 
-    def process_received_packet(self, data):
-        packet_dec = xor_packet(data, LoginServer.DECODE_KEY)
-        self.packet_received_args = split_packet(packet_dec, delimiter=32)
-
+    def process_received_packet(self):
+        self.packet_rcvd.xor_packet(LoginServer.DECODE_KEY)
+        self.packet_rcvd.split_packet(32)
+        func_ = self.return_op_code_handler()
+        if func_:
+            func_(self)
+            return True
+        else:
+            return False
 
     def return_op_code_handler(self):
-        op_code = self.packet_received_args[1].decode()
+        op_code = self.packet_rcvd.bytes_split[1].decode()
         if op_code in LoginServer.OP_CODE_TABLE:
             return LoginServer.OP_CODE_TABLE[op_code]
         else:
-            print('Unknown op code encountered:', op_code)
+            print('Unknown operation code encountered:', op_code)
             return None
 
-    def send_packet(self, func_):
-        if not func_:
-            return False
-        self.reset_packet()
-        func_(self)
-        self.build_packet(' ', '\n')
-        self.packet_bytes = xor_packet(self.packet_bytes, LoginServer.ENCODE_KEY)
-        self.connection_socket.sendall(self.packet_bytes)
-        return True
+    def send_packet(self):
+        self.packet_send.build_packet(' ', '\n')
+        self.packet_send.xor_packet(LoginServer.ENCODE_KEY)
+        self.connection_socket.sendall(self.packet_send.bytes)
 
-    def add_to_packet(self, value, type_):
-        self.packet_content.append((value, type_))
-
-    def build_packet(self, delimiter='', end=''):
-        len_ = len(self.packet_content)
-        for i, argument in enumerate(self.packet_content):
-            if argument[1] == 'str':
-                for char_ in argument[0]:
-                    self.packet_bytes.append(ord(char_))
-            else:
-                self.packet_bytes.extend(struct.pack(argument[1], argument[0]))
-            if delimiter != '' and i != len_ - 1:
-                self.packet_bytes.append(ord(delimiter))
-            if i == len_ - 1:
-                self.packet_bytes.append(ord(end))
