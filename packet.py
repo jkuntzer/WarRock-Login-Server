@@ -6,6 +6,7 @@ class Packet:
         self.content = list()
         self.bytes = None
         self.bytes_split = list()
+        self._unpack_counter = 0
 
         if bytes_:
             if type(bytes_) == bytearray:
@@ -15,12 +16,38 @@ class Packet:
             else:
                 raise TypeError
 
-    def unpack_from_bytes(self, unpack_string):
-        for i, arg in enumerate(self.bytes_split):
-            if unpack_string[i] == 's':
-                self.add_to_packet(arg.decode(), 's')
+    def unpack_multiple(self, unpack_string):
+        values = list()
+        prev_counter = self._unpack_counter
+        try:
+            for i in range(len(unpack_string)):
+                if unpack_string[i] == 's':
+                    value = self.bytes_split[self._unpack_counter].decode()
+                else:
+                    value = struct.unpack(unpack_string[i], self.bytes_split[self._unpack_counter])[0]
+                self.add_to_packet(value, unpack_string[i])
+                values.append(value)
+                self._unpack_counter += 1
+            return values
+        except struct.error:
+            # reset the split packet
+            print('Error occured while trying to unpack {} with the following unpacking string {}'
+                  .format(b''.join(self.bytes_split), unpack_string))
+            self._unpack_counter = prev_counter
+
+    def unpack_one(self, unpack_string):
+        try:
+            if unpack_string == 's':
+                value = self.bytes_split[self._unpack_counter].decode()
             else:
-                self.add_to_packet(struct.unpack(unpack_string[i], arg)[0], unpack_string[i])
+                value = struct.unpack(unpack_string, self.bytes_split[self._unpack_counter])[0]
+            self.add_to_packet(value, unpack_string)
+            self._unpack_counter += 1
+            return value
+        except struct.error:
+            print('Error occured while trying to unpack {} with the following unpacking string {}'
+                  .format(self.bytes_split[self._unpack_counter], unpack_string))
+            return None
 
     def reset_packet(self):
         self.content = list()
