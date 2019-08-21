@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/Warrock Login Server.iml" filepath="$PROJECT_DIR$/.idea/Warrock Login Server.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/WarRock Servers.iml" filepath="$PROJECT_DIR$/.idea/WarRock Servers.iml" />
     </modules>
   </component>
 </project>

@@ -25,7 +25,7 @@ class Packet:
                     value = self.bytes_split[self._unpack_counter].decode()
                 else:
                     value = struct.unpack(unpack_string[i], self.bytes_split[self._unpack_counter])[0]
-                self.add_to_packet(value, unpack_string[i])
+                self.add_to_packet([value], unpack_string[i])
                 values.append(value)
                 self._unpack_counter += 1
             return values
@@ -53,8 +53,15 @@ class Packet:
         self.content = list()
         self.bytes = None
 
-    def add_to_packet(self, value, type_):
-        self.content.append((value, type_))
+    def add_to_packet(self, values, types):
+        try:
+            if not len(values) == len(types):
+                print('{} and {} are not of equal length.'.format(values, types))
+            else:
+                for i in range(len(values)):
+                    self.content.append((values[i], types[i]))
+        except TypeError:
+            print('{} or {} is not an iterable.'.format(values, types))
 
     def build_packet(self, delimiter, end):
         if type(delimiter) == str:
@@ -65,7 +72,7 @@ class Packet:
         tmp_bytearray = bytearray()
         for i, argument in enumerate(self.content):
             if argument[1] == 's':
-                tmp_bytearray.extend(argument[0].encode())
+                tmp_bytearray.extend(str(argument[0]).encode())
             else:
                 tmp_bytearray.extend(struct.pack(argument[1], argument[0]))
             if delimiter != '' and i != len_ - 1:
